@@ -48,7 +48,7 @@ $graph:
           outputEval: $("outputs")
 
   - class: Workflow
-    id: mangrove-workflow-demo012
+    id: mangrove-workflow
     label: Mangrove Biomass Workflow
     doc: |
       Workflow for Mangrove Biomass Analysis
@@ -123,7 +123,7 @@ $graph:
 
     hints:
       DockerRequirement:
-        dockerPull: ghcr.io/starling-foundries/kindgrove/mangrove-cwl:v0.0.1
+        dockerPull: ghcr.io/geolabs/kindgrove/mangrove-cwl:v0.0.1-rc8
     inputs:
       cloud_cover_max:
         inputBinding:
