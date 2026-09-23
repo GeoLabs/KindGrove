@@ -1,0 +1,64 @@
+# ipython2cwl workflow manifest: chains the step notebooks of steps/ into the packed
+# CWL Workflow `mangrove-workflow-steps` (see STEPS_README.md).
+#   jupyter-repo2cwl . -o cwl_output --workflow-manifest workflow.yml
+# Everything not stated here follows the ipython2cwl convention: an output named X
+# feeds the input X of the later steps, other inputs become workflow inputs.
+id: mangrove-workflow-steps
+label: Mangrove Biomass Workflow (step notebooks)
+doc: |
+  Mangrove above-ground biomass and carbon stock estimation from Sentinel-2 L2A,
+  split into one CommandLineTool per processing step, aligned on the steps of the
+  OSPD W1 Algae Bloom workflow:
+  parse_aoi -> select_scene -> download_band (x3) -> reproject_band (x3)
+  -> calculate_indices -> estimate_biomass -> export_stac.
+namespaces:
+  s: https://schema.org/
+metadata:
+  s:softwareVersion: 0.1.0
+  s:keywords: [ospd, mangrove, biomass, carbon, sentinel-2, stac]
+  s:codeRepository: https://github.com/starling-foundries/KindGrove
+  s:license: https://spdx.org/licenses/CC-BY-NC-SA-4.0
+requirements:
+  SchemaDefRequirement:
+    types:
+      - $import: https://raw.githubusercontent.com/eoap/schemas/main/ogc.yaml
+inputs:
+  aoi:
+    type: https://raw.githubusercontent.com/eoap/schemas/main/ogc.yaml#BBox
+    label: Area of Interest
+    doc: Area of interest as a bounding box
+  cloud_cover_max:
+    type: float
+    label: Maximum Cloud Cover
+    doc: Maximum acceptable cloud cover percentage (0-100)
+  days_back:
+    type: int
+    label: Days Back
+    doc: Number of days to search backwards from current date
+steps:
+  - id: parse_aoi
+    run: cwl/parse_aoi.cwl
+  - id: select_scene
+    notebook: steps/01_select_scene.ipynb
+  - id: download_band
+    notebook: steps/02_download_band.ipynb
+    in:
+      band:
+        default: [red, green, nir]
+    scatter: band
+  - id: reproject_band
+    notebook: steps/03_reproject_band.ipynb
+    scatter: band_file
+  - id: calculate_indices
+    notebook: steps/04_calculate_indices.ipynb
+    in:
+      band_files: reproject_band/reprojected_file
+  - id: estimate_biomass
+    notebook: steps/05_estimate_biomass.ipynb
+  - id: export_stac
+    notebook: steps/06_export_stac.ipynb
+outputs:
+  stac:
+    source: export_stac/stac_catalog
+    label: STAC Catalog
+    doc: STAC Catalog with one Item holding the mask, biomass, summaries and quicklook

@@ -78,6 +78,7 @@ When independent sensors converge on the same conclusion, confidence increases. 
 
 - **HANDOFF.md** - Complete integration guide and wiki content for OGC
 - **CWL_README.md** - CWL workflow implementation summary
+- **STEPS_README.md** - The workflow split into step notebooks (`steps/`) and chained as a CWL Workflow
 - **DEMO_GUIDE.md** - Step-by-step presentation walkthrough
 - **VALIDATION_COMPARISON.md** - Cross-validation against 5 peer-reviewed studies
 - **MANGROVE_CVI_INTEGRATION.md** - Integration scenario with coastal vulnerability workflows

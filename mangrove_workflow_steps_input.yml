@@ -1,0 +1,6 @@
+# Inputs of the step workflow (mangrove-workflow-steps), same study area as execute.json
+aoi:
+  bbox: [95.15, 15.9, 95.35, 16.1]
+  crs: CRS84
+cloud_cover_max: 20.0
+days_back: 90

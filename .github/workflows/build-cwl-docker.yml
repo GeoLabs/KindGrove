@@ -52,6 +52,11 @@ jobs:
         source venv/bin/activate
         jupyter-repo2cwl --help
 
+    - name: Set image name
+      run: |
+        REPO_NAME="${{ github.repository }}"
+        echo "IMAGE_REF=ghcr.io/${REPO_NAME,,}/mangrove-cwl:${{ github.sha }}" >> $GITHUB_ENV
+
     - name: Generate CWL Docker image with repo2cwl
       run: |
         source venv/bin/activate
@@ -62,9 +67,19 @@ jobs:
         cd myApplication
         cp ../*for_cwl.ipynb . || echo "⚠️  No notebooks found in project root"
         cp ../requirements.txt . || echo "⚠️  No requirements.txt found in project root"
+        # Step notebooks, CWL-native steps and the workflow manifest
+        cp -r ../steps ../cwl ../workflow.yml .
 
-        # Generate Docker image and CWL tools
-        jupyter-repo2cwl . -o cwl_output
+        # Generate the base image (repository environment, named $IMAGE_REF), one image
+        # per notebook tool on top of it (ghcr.io/<repo>/<step>:<sha>, as in the Algae
+        # Bloom application package), one CWL tool per notebook and the packed step
+        # workflow (cwl_output/mangrove-workflow-steps.cwl). The images to publish are
+        # listed in cwl_output/images.txt.
+        jupyter-repo2cwl . -o cwl_output \
+          --workflow-manifest workflow.yml \
+          --docker-pull "$IMAGE_REF" \
+          --per-step-images
+        cat cwl_output/images.txt
 
         # List generated files
         echo "=== Generated CWL files ==="
@@ -99,11 +114,22 @@ jobs:
           echo "⚠️ No mangrove_workflow_for_cwl.cwl found"
         fi
 
+    - name: Try running cwltool on the step workflow storing provenance
+      run: |
+        source venv/bin/activate
+        cd myApplication
+        # cwltool uses the local image built above (same name as the published one)
+        cwltool --provenance ./PROV-steps \
+          cwl_output/mangrove-workflow-steps.cwl \
+          ../mangrove_workflow_steps_input.yml
+
     - name: Archive CWL Provenance
       uses: actions/upload-artifact@v4
       with:
         name: provenance-metadata
-        path: myApplication/PROV/*
+        path: |
+          myApplication/PROV/*
+          myApplication/PROV-steps/*
         retention-days: 30
 
     - name: Prepare CWL artifacts for archiving
@@ -130,8 +156,8 @@ jobs:
         echo "=== Available Docker images ==="
         docker images
         
-        # Get the generated Docker image for later steps
-        DOCKER_IMAGE=$(docker images --format "table {{.Repository}}:{{.Tag}}" | grep -E "^r2d-" | head -n 1 || echo "")
+        # The image was built under the name referenced by the CWL files
+        DOCKER_IMAGE=$(docker image inspect "$IMAGE_REF" > /dev/null 2>&1 && echo "$IMAGE_REF" || echo "")
         
         if [ ! -z "$DOCKER_IMAGE" ]; then
           echo "=== Found Docker image: $DOCKER_IMAGE ==="
@@ -147,41 +173,35 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Push Docker image to GitHub Container Registry
-      run: |        
-        if [ ! -z "$DOCKER_IMAGE" ]; then
-          echo "=== Publishing Docker image to GitHub Container Registry ==="
-          
-          # Create tags for the image
-          REPO_NAME="${{ github.repository }}"
-          BASE_TAG="ghcr.io/${REPO_NAME,,}/mangrove-cwl"
-          
-          # Tag with 'latest' and git SHA
-          docker tag "$DOCKER_IMAGE" "${BASE_TAG}:latest"
-          docker tag "$DOCKER_IMAGE" "${BASE_TAG}:${{ github.sha }}"
-          
-          # If it's a tag push, also tag with the version
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-            docker tag "$DOCKER_IMAGE" "${BASE_TAG}:${VERSION}"
-            echo "Tagged with version: ${VERSION}"
-          fi
-          
-          # Push all tags
-          docker push "${BASE_TAG}:latest"
-          docker push "${BASE_TAG}:${{ github.sha }}"
-          
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-            docker push "${BASE_TAG}:${VERSION}"
-          fi
-          
-          echo "✅ Docker image published successfully!"
-          echo "📦 Available at: ${BASE_TAG}:latest"
-          echo "📦 SHA tag: ${BASE_TAG}:${{ github.sha }}"
-        else
+    - name: Push Docker images to GitHub Container Registry
+      run: |
+        if [ -z "$DOCKER_IMAGE" ]; then
           echo "⚠️ No Docker image found to publish"
+          exit 0
         fi
+        # base image and step images, all tagged with the commit SHA by repo2cwl;
+        # also publish them as latest and, on a tag push, under the version
+        while read -r IMAGE; do
+          [ -z "$IMAGE" ] && continue
+          NAME="${IMAGE%:*}"
+          echo "=== Publishing ${NAME} ==="
+          docker tag "$IMAGE" "${NAME}:latest"
+          docker push "$IMAGE"
+          docker push "${NAME}:latest"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            docker tag "$IMAGE" "${NAME}:${VERSION}"
+            docker push "${NAME}:${VERSION}"
+          fi
+        done < myApplication/cwl_output/images.txt
+        echo "✅ Docker images published"
+
+    - name: Archive the list of images
+      uses: actions/upload-artifact@v4
+      with:
+        name: images
+        path: myApplication/cwl_output/images.txt
+        retention-days: 30
 
     - name: Summary
       run: |
