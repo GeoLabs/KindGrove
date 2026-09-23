@@ -42,7 +42,7 @@ jobs:
         pip install jupyter nbconvert matplotlib pandas
 
         # Installing ipython2cwl from GitHub (corrected version)
-        pip install git+https://github.com/gfenoy/ipython2cwl.git@develop
+        pip install git+https://github.com/gfenoy/ipython2cwl.git@feature/produce-multiple-cwl
 
         # Verifying installation
         pip list | grep ipython2cwl
@@ -120,7 +120,7 @@ jobs:
         cd myApplication
         # cwltool uses the local image built above (same name as the published one)
         cwltool --provenance ./PROV-steps \
-          cwl_output/mangrove-workflow-steps.cwl \
+          "cwl_output/mangrove-workflow-steps.cwl#mangrove-workflow-steps" \
           ../mangrove_workflow_steps_input.yml
 
     - name: Archive CWL Provenance
@@ -185,9 +185,13 @@ jobs:
           [ -z "$IMAGE" ] && continue
           NAME="${IMAGE%:*}"
           echo "=== Publishing ${NAME} ==="
-          docker tag "$IMAGE" "${NAME}:latest"
           docker push "$IMAGE"
-          docker push "${NAME}:latest"
+          # move `latest` only for main and final version tags, not for pre-releases
+          # (tags containing "-", e.g. v0.0.2-rc1) nor feature branches
+          if [[ "${{ github.ref }}" == refs/heads/main || ( "${{ github.ref }}" == refs/tags/* && "${{ github.ref }}" != *-* ) ]]; then
+            docker tag "$IMAGE" "${NAME}:latest"
+            docker push "${NAME}:latest"
+          fi
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
             docker tag "$IMAGE" "${NAME}:${VERSION}"
