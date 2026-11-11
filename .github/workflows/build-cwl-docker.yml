@@ -42,11 +42,14 @@ jobs:
         pip install jupyter nbconvert matplotlib pandas
 
         # Installing ipython2cwl from GitHub (corrected version)
-        # TODO: the step notebooks now use the CWLFormats annotation, which this branch
+        # The step notebooks now use the CWLFormats annotation, which this branch
         # does not know yet (the `format: ogc:geotiff` lines would be missing from the
         # generated CWL). Switch to @feature/cwl-format (or a commit SHA of it) once it
         # is pushed to gfenoy/ipython2cwl, or once it is merged into this branch.
-        pip install git+https://github.com/gfenoy/ipython2cwl.git@feature/produce-multiple-cwl
+        # An example of installing from a branch is presented below
+        # pip install git+https://github.com/gfenoy/ipython2cwl.git@feature/produce-multiple-cwl
+        # Installing from a specific commit SHA
+        pip install git+https://github.com/gfenoy/ipython2cwl.git@5421312
 
         # Verifying installation
         pip list | grep ipython2cwl
